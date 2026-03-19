@@ -1,41 +1,33 @@
 import requests
-import pandas as pd
+import time
 
-class FinMindFetcher:
-    BASE_URL = "https://api.finmindtrade.com/api/v4/data"
-
+class FinMindFetcher(BaseFetcher):
     def __init__(self):
-        pass
+        super().__init__()
+        self.api_url = "https://api.finmind.ai/api/v4/data"
 
-    def get_stock_data(self, stock_id, start_date, end_date):
-        """
-        Fetch stock data for a specific stock within a date range.
-        
-        :param stock_id: Stock ID for which to fetch data.
-        :param start_date: Start date for data in 'YYYY-MM-DD' format.
-        :param end_date: End date for data in 'YYYY-MM-DD' format.
-        :return: DataFrame containing stock data.
-        """
-        params = {
-            'dataset': 'StockPrice',
-            'stock_id': stock_id,
-            'date': f"{start_date},{end_date}"
-        }
-        
-        response = requests.get(self.BASE_URL, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            if data['status'] == 'SUCCESS':
-                return pd.DataFrame(data['data'])
-            else:
-                print("Error: ", data['message'])
-                return None
+    def fetch_data(self, stock_code, start_date, end_date):
+        self.validate_stock_code(stock_code)
+        params = {"dataset": "TaiwanStockPrice", "stock_id": stock_code, "start_date": start_date, "end_date": end_date}
+        response = self._make_request(params)
+        return self.process_response(response)
+
+    def _make_request(self, params):
+        try:
+            response = requests.get(self.api_url, params=params)
+            response.raise_for_status()
+            time.sleep(0.5)  # Rate limit
+            return response.json()
+        except requests.RequestException as e:
+            print(f"Error during API request: {e}")
+            raise
+
+    def validate_stock_code(self, stock_code):
+        if not isinstance(stock_code, str) or len(stock_code) != 4:
+            raise ValueError(f"Invalid stock code: {stock_code}. Taiwan stock codes must be 4 characters long.")
+
+    def process_response(self, response):
+        if response.get('success'):
+            return response['data']  # Assuming 'data' key contains the necessary information
         else:
-            print("Failed to fetch data: ", response.status_code)
-            return None
-
-# Example usage
-if __name__ == "__main__":
-    fetcher = FinMindFetcher()
-    stock_data = fetcher.get_stock_data("2330", "2021-01-01", "2021-12-31")
-    print(stock_data)
+            raise Exception(f"Failed to fetch data: {response.get('message')}")
